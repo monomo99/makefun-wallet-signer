@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>make.fun — Link Wallet</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #222; }
+  h1 { font-size: 1.3rem; }
+  pre { background: #f4f4f4; padding: 1rem; white-space: pre-wrap; word-break: break-word; border-radius: 8px; font-size: .85rem; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 110px; font-size: .85rem; padding: .6rem; border-radius: 8px; border: 1px solid #ccc; }
+  button { font-size: 1rem; padding: .7rem 1.2rem; margin: .4rem .4rem .4rem 0; border-radius: 8px; border: 0; background: #4c3df0; color: #fff; cursor: pointer; }
+  button:disabled { background: #aaa; cursor: default; }
+  #sig { background: #eef7ee; }
+  .warn { color: #b00; }
+  .ok { color: #080; }
+  .muted { color: #666; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Link dompet ke akun make.fun @molensluna</h1>
+<p class="muted">Halaman ini cuma minta Phantom menandatangani satu pesan. Bukan transaksi, tanpa biaya, dan private key tidak pernah keluar dari Phantom kamu.</p>
+
+<h2>1. Pesan yang ditandatangani</h2>
+<pre id="msg">Memuat pesan…</pre>
+<textarea id="msgInput" placeholder="Kalau pesannya tidak muncul otomatis, tempel pesannya di sini" style="display:none"></textarea>
+
+<h2>2. Hubungkan Phantom</h2>
+<p><button id="connectBtn">Connect Phantom</button> <span id="connStatus" class="muted">belum terhubung</span></p>
+<p id="addrWarn" class="warn" style="display:none">Dompet yang terhubung bukan dompet baru yang didaftarkan. Pakai dompet baru (7rYo2FAq5UjGTr3JmeoLnwHCNiQQd53F248nQHr339sk).</p>
+
+<h2>3. Tandatangani</h2>
+<p><button id="signBtn" disabled>Sign Message</button></p>
+
+<h2>4. Signature (kirim ini ke Luna)</h2>
+<pre id="sig">Belum ada signature.</pre>
+<p><button id="copyBtn" disabled>Copy Signature</button></p>
+<p class="muted">Signature ini bukti sekali pakai — aman dibagikan ke Luna. Jangan pernah bagikan private key / seed phrase ke siapa pun.</p>
+
+<script>
+// ---- base58 encode (Bitcoin alphabet), no dependencies ----
+const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function base58Encode(bytes) {
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
+  const digits = [0];
+  for (let i = zeros; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      carry += digits[j] << 8;
+      digits[j] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry > 0) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+  }
+  let out = '1'.repeat(zeros);
+  for (let i = digits.length - 1; i >= 0; i--) out += ALPHABET[digits[i]];
+  return out;
+}
+
+const EXPECTED = '7rYo2FAq5UjGTr3JmeoLnwHCNiQQd53F248nQHr339sk';
+const params = new URLSearchParams(location.search);
+let message = params.get('msg') || '';
+const msgEl = document.getElementById('msg');
+const msgInput = document.getElementById('msgInput');
+if (message) { msgEl.textContent = message; }
+else { msgEl.style.display = 'none'; msgInput.style.display = 'block'; }
+
+let provider = null;
+document.getElementById('connectBtn').onclick = async () => {
+  const sol = window.solana;
+  if (!sol || !sol.isPhantom) { alert('Phantom tidak ketemu di browser ini. Buka halaman ini di browser yang ada Phantom-nya.'); return; }
+  try {
+    const r = await sol.connect();
+    provider = sol;
+    const addr = r.publicKey.toString();
+    document.getElementById('connStatus').textContent = 'terhubung: ' + addr;
+    document.getElementById('connStatus').className = addr === EXPECTED ? 'ok' : 'warn';
+    document.getElementById('addrWarn').style.display = addr === EXPECTED ? 'none' : 'block';
+    document.getElementById('signBtn').disabled = false;
+  } catch (e) { alert('Gagal connect: ' + (e && e.message ? e.message : e)); }
+};
+
+document.getElementById('signBtn').onclick = async () => {
+  const m = message || msgInput.value.trim();
+  if (!m) { alert('Tidak ada pesan untuk ditandatangani.'); return; }
+  if (!provider) { alert('Hubungkan Phantom dulu.'); return; }
+  try {
+    const encoded = new TextEncoder().encode(m);
+    const signed = await provider.signMessage(encoded, 'utf8');
+    const sig = base58Encode(signed.signature);
+    document.getElementById('sig').textContent = sig;
+    document.getElementById('copyBtn').disabled = false;
+  } catch (e) { alert('Gagal sign: ' + (e && e.message ? e.message : e)); }
+};
+
+document.getElementById('copyBtn').onclick = async () => {
+  const sig = document.getElementById('sig').textContent.trim();
+  try { await navigator.clipboard.writeText(sig); alert('Signature disalin.'); }
+  catch (e) {
+    const t = document.createElement('textarea');
+    t.value = sig; document.body.appendChild(t); t.select();
+    document.execCommand('copy'); document.body.removeChild(t);
+    alert('Signature disalin.');
+  }
+};
+</script>
+</body>
+</html>
