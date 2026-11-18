@@ -27,7 +27,7 @@
 
 <h2>2. Hubungkan Phantom</h2>
 <p><button id="connectBtn">Connect Phantom</button> <span id="connStatus" class="muted">belum terhubung</span></p>
-<p id="addrWarn" class="warn" style="display:none">Dompet yang terhubung bukan dompet baru yang didaftarkan. Pakai dompet baru (7rYo2FAq5UjGTr3JmeoLnwHCNiQQd53F248nQHr339sk).</p>
+<p id="addrWarn" class="warn" style="display:none">Dompet yang terhubung bukan dompet yang didaftarkan.</p>
 
 <h2>3. Tandatangani</h2>
 <p><button id="signBtn" disabled>Sign Message</button></p>
@@ -58,9 +58,11 @@ function base58Encode(bytes) {
   return out;
 }
 
-const EXPECTED = '7rYo2FAq5UjGTr3JmeoLnwHCNiQQd53F248nQHr339sk';
 const params = new URLSearchParams(location.search);
 let message = params.get('msg') || '';
+// The wallet to sign with is the one named in the message itself, so the
+// check never goes stale when the wallet changes.
+const EXPECTED = (message.match(/^Wallet: ([1-9A-HJ-NP-Za-km-z]{32,44})$/m) || [])[1] || '';
 const msgEl = document.getElementById('msg');
 const msgInput = document.getElementById('msgInput');
 if (message) { msgEl.textContent = message; }
@@ -76,7 +78,9 @@ document.getElementById('connectBtn').onclick = async () => {
     const addr = r.publicKey.toString();
     document.getElementById('connStatus').textContent = 'terhubung: ' + addr;
     document.getElementById('connStatus').className = addr === EXPECTED ? 'ok' : 'warn';
-    document.getElementById('addrWarn').style.display = addr === EXPECTED ? 'none' : 'block';
+    const warnEl = document.getElementById('addrWarn');
+    warnEl.textContent = 'Dompet yang terhubung bukan dompet yang didaftarkan. Pakai dompet ' + EXPECTED + '.';
+    warnEl.style.display = addr === EXPECTED ? 'none' : 'block';
     document.getElementById('signBtn').disabled = false;
   } catch (e) { alert('Gagal connect: ' + (e && e.message ? e.message : e)); }
 };
